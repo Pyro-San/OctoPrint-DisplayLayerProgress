@@ -90,16 +90,19 @@ class DisplaylayerprogressPlugin(
         self._progress = str(progress)
         self._logger.info("**** print_progress: '" + self._progress + "'")
         self._updateDisplay()
+        self._updateProgressBarOnPrinter(progress, storage)
+
 
     # start/stop event-hook
     def on_event(self, event, payload):
+        storage = ""
+        if payload:
+            storage = payload.get("origin", "")
+
         if event == Events.FILE_SELECTED:
             self._logger.info("File selected. Determining number of layers.")
-            # TODO make reset-methode
             # reset layer-values
-            self._layerTotalCount = NOT_PRESENT
-            self._currentLayer = NOT_PRESENT
-            self._progress = str(0)
+            self._resetValues(storage)
 
             selectedFile = payload.get("file", "")
             markerLayerCount = LAYER_COUNT_EXPRESSION
@@ -115,15 +118,13 @@ class DisplaylayerprogressPlugin(
             self._updateDisplay()
 
         elif event == Events.FILE_DESELECTED:
-            # TODO make reset-methode
             # reset layer-values
-            self._layerTotalCount = NOT_PRESENT
-            self._currentLayer = NOT_PRESENT
-            self._progress = str(0)
+            self._resetValues(storage)
 
         elif event == Events.PRINT_STARTED:
             self._logger.info("Printing started. Detailed progress started." + str(payload))
             self._updateDisplay()
+            self._updateProgressBarOnPrinter(0, storage)
 
         elif event in (Events.PRINT_DONE, Events.PRINT_FAILED, Events.PRINT_CANCELLED):
             self._logger.info("Printing stopped. Detailed progress stopped.")
@@ -132,9 +133,17 @@ class DisplaylayerprogressPlugin(
             self._updateDisplay()
             # send to the printer
             self._sendCommandToPrinter("M117 Print Done")
+            # update progressbar
+            self._updateProgressBarOnPrinter(100, storage)
 
         elif event == Events.CLIENT_OPENED:
             self._updateDisplay()
+
+    def _resetValues(self, storage):
+        self._layerTotalCount = NOT_PRESENT
+        self._currentLayer = NOT_PRESENT
+        self._progress = str(0)
+        self._updateProgressBarOnPrinter(0, storage)
 
     def _updateDisplay(self):
 
@@ -160,6 +169,15 @@ class DisplaylayerprogressPlugin(
         self._plugin_manager.send_plugin_message(self._identifier, dict(navBarMessage=navBarMessage,
                                                                         stateMessage=stateMessage))
         self._logger.info("** NavBar:" + navBarMessage)
+
+
+    def _updateProgressBarOnPrinter(self, progress, storage):
+        # Firmware manages progress bar when printing from SD card
+        if storage == "sdcard":
+            return
+        # Update progressbar (see M73Progress-Plugin)
+        self._sendCommandToPrinter("M73 P{}".format(progress))
+
 
     # printer specific command-manipulation.
     # e.g. ANET E10 cuts the last char from M117-commands, so this helper adds an additional underscore to the message
