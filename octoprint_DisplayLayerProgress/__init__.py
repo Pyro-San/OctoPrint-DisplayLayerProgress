@@ -32,6 +32,8 @@ HEIGHT_METHODE_Z_EXTRUSION = "zExtrusion"
 NOT_PRESENT = "-"
 LAYER_MESSAGE_PREFIX = "M117 INDICATOR-Layer"
 LAYER_COUNT_EXPRESSION = LAYER_MESSAGE_PREFIX + "([0-9]*)"
+POSTION_MODE_ABSOLUTE = "G90"
+POSTION_MODE_RELATIVE = "G91"
 
 #LAYER_EXPRESSION_CURA = ";LAYER:([0-9]+).*"
 #LAYER_EXPRESSION_S3D = "; layer ([0-9]+),.*"
@@ -45,7 +47,6 @@ extrusionPattern = re.compile(EXTRUSION_EXPRESSION)
 # Match feedrate
 FEEDRATE_EXPRESSION = "^G[0|1] .*F(\d*\.?\d*).*"
 feedratePattern = re.compile(FEEDRATE_EXPRESSION)
-
 # Match Fan speed
 FANSPEED_EXPRESSION = "^M106.* S(\d+).*"
 fanSpeedPattern = re.compile(FANSPEED_EXPRESSION)
@@ -121,6 +122,7 @@ class DisplaylayerprogressPlugin(
     _feedrateG0 = NOT_PRESENT
     _feedrateG1 = NOT_PRESENT
     _fanSpeed = NOT_PRESENT
+    _positionMode = NOT_PRESENT
 
     def __init__(self):
         self._showProgressOnPrinterDisplay = False
@@ -162,11 +164,28 @@ class DisplaylayerprogressPlugin(
             self._updateDisplay(UPDATE_DISPLAY_REASON_LAYER_CHANGED)
             # filter M117 command, not needed any more
             return []
+
+        if commandAsString.startswith(POSTION_MODE_ABSOLUTE):
+            self._positionMode = POSTION_MODE_ABSOLUTE
+        if commandAsString.startswith(POSTION_MODE_RELATIVE):
+            self._positionMode = POSTION_MODE_RELATIVE
+
         # Z-Height
         matched = zHeightPattern.match(commandAsString)
         if matched:
             zHeight = float(matched.group(3))
-            self._currentHeight = "%.2f" % zHeight
+            currentHeightAsString = NOT_PRESENT
+            if (self._positionMode == POSTION_MODE_ABSOLUTE):
+                currentHeightAsString = "%.2f" % zHeight
+
+            elif (self._positionMode == POSTION_MODE_RELATIVE):
+                tempCurrentHeight = 0.0
+                if (self._currentHeight != NOT_PRESENT):
+                    tempCurrentHeight = float(self._currentHeight)
+                tempCurrentHeight = tempCurrentHeight  + zHeight
+                currentHeightAsString = "%.2f" % tempCurrentHeight
+
+            self._currentHeight = currentHeightAsString
             self._updateDisplay(UPDATE_DISPLAY_REASON_HEIGHT_CHANGED)
         # feedrate
         matched = feedratePattern.match(commandAsString)
